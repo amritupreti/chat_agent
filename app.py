@@ -23,22 +23,39 @@ def initialize(host: str, port: int, model: str, bank_id_str: str):
         bank_ids = []
     asyncio.run(CHATBOT.initialize_agents(bank_ids))
 
-@app.route('/chat', methods=['POST'])
+@app.route('/api/chatbot', methods=['GET'])
+def getchat():
+    a = CHAT_HISTORY[SELECTED_AGENT]
+    conversation = []
+    for i, (user1_msg, user2_msg) in enumerate(a):
+        conversation.append({"from": "user1", "to": "user2", "body": user1_msg})
+        conversation.append({"from": "user2", "to": "user1", "body": user2_msg})
+
+    return conversation
+
+@app.route('/api/chatbot', methods=['POST'])
 def chat():
     global SELECTED_AGENT, CONTEXT, CHAT_HISTORY
-    data = request.json
-    message = data.get('message', '')
-    attachments = data.get('attachments', [])
     
+    # get all form post data
+    form_data = request.form.to_dict()
+    print(form_data)
+
+    message = request.form.get('body', '')
+    attachments = request.form.getlist('attachments')  # If attachments are submitted as multiple form fields
+    print(message)
+    print(attachments)
     response, inserted_context = asyncio.run(
         CHATBOT.chat(SELECTED_AGENT, message, attachments)
     )
+    
     chat_history = CHAT_HISTORY.get(SELECTED_AGENT, [])
     chat_history.append((message, response))
     CHAT_HISTORY[SELECTED_AGENT] = chat_history
     CONTEXT[SELECTED_AGENT] = inserted_context
     
     return jsonify({'response': response, 'context': inserted_context})
+
 
 @app.route('/select_agent', methods=['POST'])
 def select_agent():
