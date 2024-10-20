@@ -3,29 +3,26 @@ import os
 from flask import Flask, request, jsonify
 import fire
 
-from .api import AgentChoice, AgentStore
+from .api import Agent
 
 app = Flask(__name__)
 
 MODEL = "Llama3.1-8B-Instruct"
 CHATBOT = None
-SELECTED_AGENT = AgentChoice.Memory
-BANK_ID = "5f126596-87d8-4b9f-a44d-3a5b93bfc171"
+SELECTED_AGENT = "5f126596-87d8-4b9f-a44d-3a5b93bfc171"
 CHAT_HISTORY = {}
 CONTEXT = {}
 
-def initialize(host: str, port: int, model: str, bank_id_str: str):
-    global CHATBOT
-    CHATBOT = AgentStore(host, port, model)
-    if bank_id_str:
-        bank_ids = bank_id_str.split(",")
-    else:
-        bank_ids = []
-    asyncio.run(CHATBOT.initialize_agents(bank_ids))
 
-@app.route('/api/chatbot', methods=['GET'])
+def initialize(host: str, port: int):
+    global CHATBOT
+    CHATBOT = Agent(host, port)
+    # asyncio.run(CHATBOT.initialize_agents(bank_ids))
+
+@app.route('/apibot', methods=['GET'])
 def getchat():
     a = CHAT_HISTORY[SELECTED_AGENT]
+    print(a)
     conversation = []
     for i, (user1_msg, user2_msg) in enumerate(a):
         conversation.append({"from": "user1", "to": "user2", "body": user1_msg})
@@ -33,43 +30,31 @@ def getchat():
 
     return conversation
 
-@app.route('/api/chatbot', methods=['POST'])
+@app.route('/apibot', methods=['POST'])
 def chat():
     global SELECTED_AGENT, CONTEXT, CHAT_HISTORY
     
     # get all form post data
     form_data = request.form.to_dict()
-    print(form_data)
+    
 
     message = request.form.get('body', '')
     attachments = request.form.getlist('attachments')  # If attachments are submitted as multiple form fields
-    print(message)
-    print(attachments)
-    response, inserted_context = asyncio.run(
-        CHATBOT.chat(SELECTED_AGENT, message, attachments)
+   
+    response = asyncio.run(
+        CHATBOT.chat(message, attachments)
     )
     
     chat_history = CHAT_HISTORY.get(SELECTED_AGENT, [])
     chat_history.append((message, response))
     CHAT_HISTORY[SELECTED_AGENT] = chat_history
-    CONTEXT[SELECTED_AGENT] = inserted_context
-    
-    return jsonify({'response': response, 'context': inserted_context})
+    # CONTEXT[SELECTED_AGENT] = inserted_context
+    # print("Response -> ", response)
+    return jsonify({'response': "ok"})
 
 
-@app.route('/select_agent', methods=['POST'])
-def select_agent():
-    global SELECTED_AGENT
-    data = request.json
-    agent_choice = data.get('agent_choice', '')
-    if agent_choice == "":
-        agent_choice = "memory"
-    print("Selecting Agetnt ", agent_choice)
-    SELECTED_AGENT = AgentChoice[agent_choice]
-    return jsonify({'message': f'Selected Agent: {SELECTED_AGENT}'})
-
-def main(host: str = "localhost", port: int = 5000, model: str = MODEL, bank_ids: str = ""):
-    initialize(host, port, model, bank_ids)
+def main(host: str = "localhost", port: int = 5000):
+    initialize(host, port)
     app.run(host="0.0.0.0", port=8080)
 
 if __name__ == "__main__":
