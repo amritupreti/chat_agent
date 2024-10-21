@@ -5,6 +5,12 @@ import fire
 
 from .api import Agent
 
+from .common.client_utils import *  # noqa: F403
+
+from .multi_turn import *  # noqa: F403
+
+from .common.client_utils import *  # noqa: F403
+
 app = Flask(__name__)
 
 MODEL = "Llama3.1-8B-Instruct"
@@ -13,16 +19,16 @@ SELECTED_AGENT = "5f126596-87d8-4b9f-a44d-3a5b93bfc171"
 CHAT_HISTORY = {}
 CONTEXT = {}
 
-
 def initialize(host: str, port: int):
     global CHATBOT
     CHATBOT = Agent(host, port)
+    
     # asyncio.run(CHATBOT.initialize_agents(bank_ids))
+
 
 @app.route('/apibot', methods=['GET'])
 def getchat():
     a = CHAT_HISTORY[SELECTED_AGENT]
-    print(a)
     conversation = []
     for i, (user1_msg, user2_msg) in enumerate(a):
         conversation.append({"from": "user1", "to": "user2", "body": user1_msg})
@@ -42,7 +48,17 @@ def chat():
     attachments = request.form.getlist('attachments')  # If attachments are submitted as multiple form fields
    
     response = asyncio.run(
-        CHATBOT.chat(message, attachments)
+        execute_turns(
+            agent_config=CHATBOT.agent_config,
+            custom_tools=CHATBOT.tool_definitions,
+            turn_inputs=[
+                prompt_to_turn(
+                    message
+                ),
+            ],
+            host=CHATBOT.host,
+            port=CHATBOT.port,
+        )
     )
     
     chat_history = CHAT_HISTORY.get(SELECTED_AGENT, [])

@@ -10,6 +10,7 @@ from .mongo import AlertsDataTool
 from .common.client_utils import *
 from dotenv import load_dotenv
 from llama_stack_client import LlamaStackClient
+from llama_stack_client.lib.agents.event_logger import EventLogger
 from llama_stack_client.types import Attachment, SamplingParams, UserMessage
 from llama_stack_client.types.agent_create_params import (
     AgentConfig,
@@ -25,9 +26,10 @@ from .utils import data_url_from_file
 
 load_dotenv()
 
-
 class Agent:
     def __init__(self, host: str, port: int):
+        self.host = host
+        self.port = port
         self.agent_id = None
         self.session_id = None
         self.client = LlamaStackClient(
@@ -44,18 +46,7 @@ class Agent:
                 disable_safety=True,
             )
         )
-        # self.agent_config = AgentConfig(
-        #     model="Llama3.1-8B-Instruct",
-        #     instructions="You are a helpful assistant",
-        #     sampling_params=SamplingParams(strategy="greedy", temperature=1.0, top_p=0.9),
-        #     tools=self.tool_definitions,
-        #     tool_choice="auto",
-        #     tool_prompt_format="function_tag",
-        #     input_shields=[],
-        #     output_shields=[],
-        #     enable_session_persistence=True,
-        # )
-        self.create_agent(self.agent_config)
+        
 
     def create_agent(self, agent_config: AgentConfig):
         agentic_system_create_response = self.client.agents.create(
@@ -67,51 +58,9 @@ class Agent:
             session_name="test_session",
         )
         self.session_id = agentic_system_create_session_response.session_id
-
-    def execute_turn(self, content: str):
-        response = self.client.agents.turn.create(
-            agent_id=self.agent_id,
-            session_id=self.session_id,
-            messages=[
-                UserMessage(content=content, role="user"),
-            ],
-            stream=True,
+        return AgentWithCustomToolExecutor(
+            self.client, self.agent_id, self.session_id, agent_config, self.tool_definitions
         )
-        for chunk in response:
-            if chunk.event.payload.event_type != "turn_complete":
-                yield chunk
-
-
-    async def chat(self, message, attachments) -> str:
-        # messages = []
-        # atts = []
-        # if attachments is not None:
-        #     for attachment in attachments:
-        #         atts.append(
-        #             Attachment(
-        #                 content=data_url_from_file(attachment),
-        #                 # hardcoded for now since mimetype is inferred from data_url
-        #                 mime_type="text/plain",
-        #             )
-        #         )
-        # messages.append(UserMessage(role="user", content=message))
-        response = self.execute_turn(message)
-        for resp in response:
-            print(resp)
-            event = resp.event
-            event_type = event.payload.event_type
-            if event_type == "step_complete":
-                content = event.payload.step_details.inference_model_response.content
-                if content == "":
-                    content = "Sorry, I don't have an answer for that. Ask me something else."
-    
-        return content
-
-
-
-
-
-
 
 
 

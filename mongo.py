@@ -1,5 +1,7 @@
 import os
 import sys
+import json
+from bson import json_util
 from typing import Dict
 
 from pymongo import MongoClient
@@ -20,16 +22,16 @@ class AlertsDataTool(SingleMessageCustomTool):
 
     def get_params_definition(self) -> Dict[str, ToolParamDefinitionParam]:
         return {
-            "hostname": ToolParamDefinitionParam(
-                param_type="str",
-                description="Hostname",
-                required=False,
-            ),
-            "service": ToolParamDefinitionParam(
-                param_type="str",
-                description="Service name",
-                required=False,
-            ),
+            # "hostname": ToolParamDefinitionParam(
+            #     param_type="str",
+            #     description="Hostname",
+            #     required=False,
+            # ),
+            # "service": ToolParamDefinitionParam(
+            #     param_type="str",
+            #     description="Service name",
+            #     required=False,
+            # ),
             "status": ToolParamDefinitionParam(
                 param_type="str",
                 description="Status",
@@ -37,32 +39,26 @@ class AlertsDataTool(SingleMessageCustomTool):
             ),
         }
 
-    async def run_impl(self, hostname: str, service: str, status: str):
+    async def run_impl(self, status: str, *args, **kwargs):
         # Connect to MongoDB
         try:
-            print("Connecting to MongoDB ", os.getenv('MONGODB_URI'))
+            print("Connecting to MongoDB", os.getenv('MONGODB_URI'))
             client = MongoClient(os.getenv('MONGODB_URI'))
-            print("Connected to MongoDB")
             db = client['alertagility']
             collection = db['alertagility_alerts']
         except Exception:
-            response =[]
+            print("Error connecting to MongoDB. Cant fetch alerts data.")
+            response = "Error connecting to MongoDB. Cant fetch alerts data."
             return response
 
         # Query the MongoDB collection
         query = {"status": "triggered"}
-        if status != "":
-            query = {"status": status}
-
-        if hostname != "":
-            query["hostname"] = hostname
-
-        response = []
+        projection = {"_id": 0}
         try:
-            data = collection.find(query)
-        except Exception:
-            return response
+            data = collection.find(query, projection)
+            result = list(data)
+            result_serialized = json.loads(json_util.dumps(result))
+        except Exception as e:
+            result_serialized = [str(e)]
         
-        for i in data:
-            response.append(i)
-        return response
+        return result_serialized
